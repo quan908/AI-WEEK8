@@ -1,0 +1,148 @@
+import pygame
+import random
+
+
+# Set up the screen dimensions and maximum speed for agents
+WIDTH = 1280
+HEIGHT = 720
+MAX_SPEED = 5
+NUMBER_AGENT = 10 # Number of agents in the simulation
+
+
+# Define the target list
+targets = []
+
+
+# Obstacle positions (vertical rectangles at the bottom with different sizes)
+OBSTACLE_RECTANGLES = [
+    pygame.Rect(100, HEIGHT - 300, 50, 300),  # Tall obstacle
+    pygame.Rect(400, HEIGHT - 100, 100, 100)  # Shorter and wider obstacle
+]
+
+
+class Agent:
+    def __init__(self, x, y):
+        self.position = pygame.Vector2(x, y)
+        self.velocity = pygame.Vector2(
+            random.uniform(-MAX_SPEED, MAX_SPEED), random.uniform(-MAX_SPEED, MAX_SPEED))
+        self.acceleration = pygame.Vector2(0, 0)
+        self.mass = 1
+
+
+    def update(self):
+        self.velocity += self.acceleration
+        if self.velocity.length() > MAX_SPEED:
+            self.velocity = self.velocity.normalize() * MAX_SPEED
+        self.position += self.velocity
+        self.acceleration = pygame.Vector2(0, 0)
+
+
+    def apply_force(self, x, y):
+        force = pygame.Vector2(x, y)
+        self.acceleration += force / self.mass
+
+
+    def seek(self, target):
+        d = target - self.position
+        distance = d.length()
+        if distance < 100:  # Slow down when close to the target
+            d = d.normalize() * (distance / 100)  # Scale by the distance to target
+        else:
+            d = d.normalize() * 0.1
+        self.apply_force(d.x, d.y)
+
+
+    def avoid_obstacles(self):
+        for rect in OBSTACLE_RECTANGLES:
+            if rect.collidepoint(self.position):
+                # Calculate the direction away from the obstacle
+                d = self.position - pygame.Vector2(rect.center)
+                self.apply_force(d.x, d.y)
+
+
+    def draw(self, screen):
+        # Draw the agent as a  circle
+        pygame.draw.circle(screen, "red", (int(self.position.x), int(self.position.y)), 15)
+
+
+    def eat(self, targets):
+        # Check if the agent is close enough to eat any targets
+        for target in targets[:]:  # Iterate over a copy of the list
+            if self.position.distance_to(target) < 15:  # Eating radius
+                targets.remove(target)  # Remove the target if eaten
+
+
+# Initialize Pygame
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 36)
+
+
+# Create a list of agents at random positions within the screen
+agents = [Agent(random.uniform(0, WIDTH), random.uniform(0, HEIGHT))
+          for _ in range(NUMBER_AGENT)]
+
+
+# Main game loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            # Add target (food) at the mouse position
+            targets.append(pygame.Vector2(event.pos))
+
+
+    # Fill the screen with blue color
+    screen.fill("blue")
+
+
+    # Update and draw each agent on the screen
+    for agent in agents:
+        if targets:
+            nearest_target = min(targets, key=lambda t: agent.position.distance_to(t))
+            agent.seek(nearest_target)
+        agent.avoid_obstacles()  # Apply obstacle avoidance
+        agent.eat(targets)  # Check if the agent eats any targets
+        agent.update()  # Update the agent's position
+        agent.draw(screen)  # Draw the agent on the screen
+
+
+    # Draw targets as black circles
+    for target in targets:
+        pygame.draw.circle(screen, "black", (int(target.x), int(target.y)), 10)
+
+
+    # Draw obstacles as vertical rectangles
+    for rect in OBSTACLE_RECTANGLES:
+        pygame.draw.rect(screen, "gray", rect)
+
+
+    # Boundary wrapping
+    for agent in agents:
+        if agent.position.x > WIDTH:
+            agent.position.x = 0
+        elif agent.position.x < 0:
+            agent.position.x = WIDTH
+        if agent.position.y > HEIGHT:
+            agent.position.y = 0
+        elif agent.position.y < 0:
+            agent.position.y = HEIGHT
+
+
+    # Calculate and display FPS
+    fps = int(clock.get_fps())
+    fps_text = font.render(f"FPS: {fps}", True, pygame.Color('white'))
+    screen.blit(fps_text, (WIDTH - fps_text.get_width() - 10, 10))
+
+
+    pygame.display.flip()  # Update the screen
+    clock.tick(60)  # Limit the frame rate to 60 FPS
+
+
+pygame.quit()  # Clean up and close the game window
+
+
+
